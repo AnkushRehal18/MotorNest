@@ -9,6 +9,14 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle, 
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from "@/components/ui/checkbox"
+import { useDropzone } from 'react-dropzone'
+import { toast } from 'sonner'
+import { Loader2, Upload, X } from 'lucide-react';
+import Image from 'next/image'
+import { Button } from '@/components/ui/button'
+
 const fuelTypes = ["Petrol", "Diesel", "Electric", "Hybrid", "Plug-in Hybrid"]
 const transmissions = ["Automatic", "Manual", "Semi-Automatic"]
 
@@ -27,6 +35,9 @@ const carStatues = ["AVAILABLE", "UNAVAILABLE", "SOLD"]
 const AddCarForm = () => {
 
   const [activeTab, setActiveTab] = useState("ai")
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [imageErorr, setImageError] = useState("");
+
 
   const carFormSchema = z.object({
     make: z.string().min(1, "Make is required"),
@@ -76,8 +87,57 @@ const AddCarForm = () => {
     }
   });
 
-  const onSubmit = async (data) => { };
+  const onSubmit = async (data) => {
+    if (uploadedImages.length === 0) {
+      setImageError("Please upload at least one image");
+      return;
+    }
+    
+  };
 
+  const onMultiImagesDrop = (acceptedFiles) => {
+    const validFiles = acceptedFiles.filter((file) => {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} exceeds 5MB limit and will be skipped`)
+        return false;
+      }
+      return true
+    });
+
+    if (validFiles.length === 0) return;
+
+    const newImages = [];
+
+    validFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        newImages.push(e.target.result);
+
+        if (newImages.length === validFiles.length) {
+          setUploadedImages((prev) => [...prev, ...newImages])
+          setImageError("");
+          toast.success(`Successfully uploaded ${validFiles.length} images`)
+        }
+      };
+      reader.readAsDataURL(file);
+    })
+  };
+
+  const {
+    getRootProps: getMultiImageRootProps,
+    getInputProps: getMultiImageInputProps,
+  } = useDropzone({
+    onDrop: onMultiImagesDrop,
+    accept: {
+      "images/*": [".jpeg", ".jpg", ".png", ".webp"],
+    },
+    multiple: true
+  });
+
+
+  const removeImage = (index)=>{
+    setUploadedImages((prev)=> prev.filter((_,i)=> i !== index));
+  }
   return (
     <div>
       <Tabs defaultValue="ai" className="mt-6"
@@ -309,6 +369,99 @@ const AddCarForm = () => {
                   </div>
 
                 </div>
+
+                <div className='space-y-2'>
+                  <Label htmlFor='description'>Description</Label>
+                  <Textarea
+                    id="description"
+                    {...register('description')}
+                    placeholder="Enter detailed description of the car..."
+                    className={`min-h-32 ${errors.description ? "border-b-red-500" : ""
+                      }`} />
+                  {
+                    errors.description && (
+                      <p className='text-xs text-red-500'>
+                        {errors.description.message}
+                      </p>
+                    )
+                  }
+                </div>
+
+                <div className='flex items-start space-x-3 space-y-0 rounded-md border p-4'>
+                  <Checkbox
+                    checked={watch("featured")}
+                    onCheckedChange={(checked) => {
+                      setValue("featured", checked)
+                    }} />
+                  <div className='space-y-1 leading-none'>
+                    <Label>Feature this car</Label>
+                    <p className='text-sm text-gray-500'>
+                      Featured cars apperar on the homepage
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="images"
+                    className={imageErorr ? "text-red-500" : ""}>
+                    Images {" "}
+                    {imageErorr && <span className='text-red-500'>*</span>}
+                  </Label>
+
+                  <div {...getMultiImageRootProps()} className={`
+                    border-2 border-dashed rounded-lg p-6 text-center cursor-pointer
+                    hover:bg-gray-50 transition mt-2 ${imageErorr ? "border-red-500" : "border-gray-300"
+                    }`}>
+                    <input {...getMultiImageInputProps()} />
+                    <div className='flex flex-col items-center justify-center'>
+                      <Upload className="h-12 w-12 text-gray-400 mb-3" />
+                      <p className='text-gray-600 mb-2'>
+                        Drag & drop or click to upload multiple images
+                      </p>
+
+                      <p className='text-gray-500 text-xs mt-1'>
+                        (JPG, PNG, WebP, max 5MB each)
+                      </p>
+                    </div>
+                  </div>
+                  {imageErorr && (
+                    <p className='text-xs text-red-500 mt-1'>{imageErorr}</p>
+                  )}
+
+                  {uploadedImages.length > 0 && (
+                    <div  className='mt-4'>
+                      <h3 className='text-sm font-medium mb-2'>Uploaded Images ({uploadedImages.length})</h3>
+                      <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'>
+                        {uploadedImages.map((image, index) => {
+                          return (
+                            <div key={index} className='relative group'>
+                              <Image
+                                src={image}
+                                alt={`Car image ${index + 1}`}
+                                height={50}
+                                width={50}
+                                className='h-28 w-full object-cover rounded-md'
+                                priority
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="destructive"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0
+                              group-hover:opacity-100 transition-opacity"
+                              onClick={()=>removeImage(index)}>
+                                <X className='h-3 w-3 ' />
+                              </Button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Button type="submit" className="w-full md:w-auto"
+                disabled={true}>{true ? <><Loader2 className='mr-2 h-4 w-4 animate-spin'/> Adding Car...</>: "Add Car"}</Button>
               </form>
             </CardContent>
           </Card>

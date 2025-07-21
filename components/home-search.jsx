@@ -17,18 +17,18 @@ const HomeSearch = () => {
 
   const router = useRouter();
 
-  const handleTextSubmit = async(e) => {
+  const handleTextSubmit = async (e) => {
     e.preventDefault();
-    if(!searchTerm.trim()){
+    if (!searchTerm.trim()) {
       toast.error("Please enter a search term");
       return;
     }
-    router.push(`/cars?search=${encodeURIComponent(searchTerm)}`) 
+    router.push(`/cars?search=${encodeURIComponent(searchTerm)}`)
   };
 
-  const handleImageSearch = async(e) => {
+  const handleImageSearch = async (e) => {
     e.preventDefault();
-    if(!searchImage){
+    if (!searchImage) {
       toast.error("Please upload an image first");
       return;
     }
@@ -143,7 +143,7 @@ const HomeSearch = () => {
             type="submit"
             className="w-full mt-2 "
             disabled={isUploading}
-            >
+          >
             {isUploading ? "Uploading..." : "Search with this image"}
           </Button>)}
         </form>
