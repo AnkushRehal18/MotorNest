@@ -1,6 +1,5 @@
 "use client"
-
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import z from 'zod'
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from 'react-hook-form'
@@ -13,9 +12,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from "@/components/ui/checkbox"
 import { useDropzone } from 'react-dropzone'
 import { toast } from 'sonner'
-import { Loader2, Upload, X } from 'lucide-react';
+import { Camera, Loader2, Router, Upload, X } from 'lucide-react';
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
+import useFetch from '@/hooks/use-fetch'
+import { addCar } from '@/actions/cars'
+// import { parse } from 'next/dist/build/swc/generated-native'
+import { useRouter } from 'next/navigation'
+import Ca from 'zod/v4/locales/ca.cjs'
 
 const fuelTypes = ["Petrol", "Diesel", "Electric", "Hybrid", "Plug-in Hybrid"]
 const transmissions = ["Automatic", "Manual", "Semi-Automatic"]
@@ -37,7 +41,9 @@ const AddCarForm = () => {
   const [activeTab, setActiveTab] = useState("ai")
   const [uploadedImages, setUploadedImages] = useState([]);
   const [imageErorr, setImageError] = useState("");
-
+  const [imagePreview, setImagePreview] = useState(null);
+  const [uploadedAiImage, setUploadedAiImage] = useState(null)
+  const router = useRouter()
 
   const carFormSchema = z.object({
     make: z.string().min(1, "Make is required"),
@@ -51,9 +57,9 @@ const AddCarForm = () => {
     price: z.string().min(1, "Price is required"),
     mileage: z.string().min(1, "Milage is required"),
     color: z.string().min(1, "Color is required"),
-    fuelTypes: z.string().min(1, "Fuel Type is required"),
-    transmissions: z.string().min(1, "Transmission is required"),
-    bodyTypes: z.string().min(1, "Body Type is required"),
+    fuelType: z.string().min(1, "Fuel Type is required"),
+    transmission: z.string().min(1, "Transmission is required"),
+    bodyType: z.string().min(1, "Body Type is required"),
     seats: z.string().optional(),
     description: z.string().min(10, "Description  must be atleat 10 characters"),
     status: z.enum(["AVAILABLE", "UNAVAILABLE", "SOLD"]),
@@ -87,12 +93,69 @@ const AddCarForm = () => {
     }
   });
 
+  // for uploading using AI drag and drop
+
+  const onAiDrop = (acceptedFiles) => {
+    const file = acceptedFiles[0];
+
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Image size must be less than 5MB");
+        return;
+      }
+
+      setUploadedAiImage(file);
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target.result);
+        toast.success("Image uploaded successfully");
+      };
+
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const {
+    getRootProps: getAiRootProps,
+    getInputProps: getAiInputProps,
+  } = useDropzone({
+    onDrop: onAiDrop,
+    accept: {
+      "image/*": [".jpeg", ".jpg", ".png", ".webp"],
+    },
+    maxFiles: 1,
+    multiple: false
+  });
+
+
+  
+
+  const { data: addCarResult, loading: addCarLoading, fn: addCarFn } = useFetch(addCar)
+
+  useEffect(() => {
+    if (addCarResult?.success) {
+      toast.success("car added successfully");
+      router.push("/admin/cars")
+    }
+  }, [addCarResult, addCarLoading])
   const onSubmit = async (data) => {
     if (uploadedImages.length === 0) {
       setImageError("Please upload at least one image");
       return;
     }
-    
+    const carData = {
+      ...data,
+      year: parseInt(data.year),
+      price: parseFloat(data.price),
+      mileage: parseInt(data.mileage),
+      seats: data.seats ? parseInt(data.seats) : null,
+    };
+
+    await addCarFn({
+      carData,
+      images: uploadedImages
+    })
   };
 
   const onMultiImagesDrop = (acceptedFiles) => {
@@ -129,14 +192,14 @@ const AddCarForm = () => {
   } = useDropzone({
     onDrop: onMultiImagesDrop,
     accept: {
-      "images/*": [".jpeg", ".jpg", ".png", ".webp"],
+      "image/*": [".jpeg", ".jpg", ".png", ".webp"],
     },
     multiple: true
   });
 
 
-  const removeImage = (index)=>{
-    setUploadedImages((prev)=> prev.filter((_,i)=> i !== index));
+  const removeImage = (index) => {
+    setUploadedImages((prev) => prev.filter((_, i) => i !== index));
   }
   return (
     <div>
@@ -429,7 +492,7 @@ const AddCarForm = () => {
                   )}
 
                   {uploadedImages.length > 0 && (
-                    <div  className='mt-4'>
+                    <div className='mt-4'>
                       <h3 className='text-sm font-medium mb-2'>Uploaded Images ({uploadedImages.length})</h3>
                       <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4'>
                         {uploadedImages.map((image, index) => {
@@ -449,7 +512,7 @@ const AddCarForm = () => {
                                 variant="destructive"
                                 className="absolute top-1 right-1 h-6 w-6 opacity-0
                               group-hover:opacity-100 transition-opacity"
-                              onClick={()=>removeImage(index)}>
+                                onClick={() => removeImage(index)}>
                                 <X className='h-3 w-3 ' />
                               </Button>
                             </div>
@@ -461,12 +524,78 @@ const AddCarForm = () => {
                 </div>
 
                 <Button type="submit" className="w-full md:w-auto"
-                disabled={true}>{true ? <><Loader2 className='mr-2 h-4 w-4 animate-spin'/> Adding Car...</>: "Add Car"}</Button>
+                  disabled={addCarLoading}>{addCarLoading ? <><Loader2 className='mr-2 h-4 w-4 animate-spin' /> Adding Car...</> : "Add Car"}</Button>
               </form>
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="ai" className="mt-6">Change your password here.</TabsContent>
+
+        {/* creating the AI upload page*/}
+
+        <TabsContent value="ai" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>AI Powered Car Details Extraction</CardTitle>
+              <CardDescription>
+                Upload an image of a car and let AI extract its details.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className='space-y-6'>
+                <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                  {imagePreview ? (<div className='flex flex-col items-center'>
+
+                    <img src={imagePreview}
+                      alt="Car Preview"
+                      className='max-h-56 max-w-full object-contain mb-4' />
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setImagePreview(null);
+                          setUploadedAiImage(null)
+                        }}> 
+                        Remove
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        // onClick={}
+                        // disabled={}
+                        > 
+                        {true ?( <>
+                        <Loader2 className='mr-2 h-4 w-4 animate-spin'/>
+                        Processing... 
+                        </>) : (
+                          <>
+                          <Camera className='mr-2 h-4 w-4'/>
+                          Extract Details
+                          </>
+                        )}  
+                      </Button>
+                    </div>
+                  </div>
+                  ) : (
+                    <div {...getAiRootProps()} className='cursor-pointer hover:bg-gray-50 transition'>
+                      <input {...getAiInputProps()} />
+                      <div className='flex flex-col items-center justify-center'>
+                        <Camera className="h-12 w-12 text-gray-400 mb-2" />
+                        <p className='text-gray-600 text-sm'>
+                          Drag & drop a car image or upload a car image
+                        </p>
+                        <p className='text-gray-500 text-xs mt-1'>
+                          Supports: JPG, PNG, WebP (max 5MB)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   )

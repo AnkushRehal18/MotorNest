@@ -1,11 +1,12 @@
-import { db } from "@/lib/prisma";
-import { auth } from "@clerk/nextjs/server";
+"use server"
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { cookies } from "next/headers";
-import { v4 as uuidv4 } from "uuid";
-import { createClient } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
-import { errorToJSON } from "next/dist/server/render";
+import { v4 as uuidv4 } from "uuid";
+import { db } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase";
+import { auth } from "@clerk/nextjs/server";
 
 //function to convert file to base64
 
@@ -158,7 +159,7 @@ export async function addCar({ carData, images }) {
             const fileName = `image-${Date.now()}-${i}.${fileExtension}`;
             const filePath = `${folderPath}/${fileName}`
 
-            const {data, error} = await supabase.storage.from("car-image").upload(filePath, imageBuffer, {
+            const {data, error} = await supabase.storage.from("car-images").upload(filePath, imageBuffer, {
                 contentType :`image/${fileExtension}`,
             });
 
@@ -167,8 +168,7 @@ export async function addCar({ carData, images }) {
                 throw new Error(`Failed to upload image : ${error.message}`);
             }
 
-            const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/
-            public/car-images/${filePath}`;  //disable cache in config
+            const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/car-images/${filePath}`;  //disable cache in config
 
 
             imageUrls.push(publicUrl);
