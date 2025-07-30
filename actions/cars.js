@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { db } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase";
 import { auth } from "@clerk/nextjs/server";
+import { serializeCarData } from "@/lib/helper";
 
 //function to convert file to base64
 
@@ -139,10 +140,10 @@ export async function addCar({ carData, images }) {
 
         const imageUrls = [];
 
-        for(let i =0; i<images.length ; i++ ){
-            const base64Data =images[i];
+        for (let i = 0; i < images.length; i++) {
+            const base64Data = images[i];
 
-            if(!base64Data || !base64Data.startsWith("data:image/")){
+            if (!base64Data || !base64Data.startsWith("data:image/")) {
                 console.log("Skipping invalid image data");
                 continue;
             }
@@ -153,17 +154,17 @@ export async function addCar({ carData, images }) {
 
             // finding the file extension
             const mimeMatch = base64Data.match(/data:image\/([a-zA-Z0-9]+);/);
-            const fileExtension = mimeMatch ? mimeMatch[1] :"jpeg";
+            const fileExtension = mimeMatch ? mimeMatch[1] : "jpeg";
 
             // creating the filename
             const fileName = `image-${Date.now()}-${i}.${fileExtension}`;
             const filePath = `${folderPath}/${fileName}`
 
-            const {data, error} = await supabase.storage.from("car-images").upload(filePath, imageBuffer, {
-                contentType :`image/${fileExtension}`,
+            const { data, error } = await supabase.storage.from("car-images").upload(filePath, imageBuffer, {
+                contentType: `image/${fileExtension}`,
             });
 
-            if(error){
+            if (error) {
                 console.error("Erorr uploading image:" + error);
                 throw new Error(`Failed to upload image : ${error.message}`);
             }
@@ -174,38 +175,183 @@ export async function addCar({ carData, images }) {
             imageUrls.push(publicUrl);
         }
 
-        if(imageUrls.length === 0){
+        if (imageUrls.length === 0) {
             throw new Error("No valid images were uploaded");
         }
 
         const car = await db.car.create({
             data: {
-                 id: carId, // Use the same ID we used for the folder
-        make: carData.make,
-        model: carData.model,
-        year: carData.year,
-        price: carData.price,
-        mileage: carData.mileage,
-        color: carData.color,
-        fuelType: carData.fuelType,
-        transmission: carData.transmission,
-        bodyType: carData.bodyType,
-        seats: carData.seats,
-        description: carData.description,
-        status: carData.status,
-        featured: carData.featured,
-        images: imageUrls, // Store the array of image URLs
+                id: carId, // Use the same ID we used for the folder
+                make: carData.make,
+                model: carData.model,
+                year: carData.year,
+                price: carData.price,
+                mileage: carData.mileage,
+                color: carData.color,
+                fuelType: carData.fuelType,
+                transmission: carData.transmission,
+                bodyType: carData.bodyType,
+                seats: carData.seats,
+                description: carData.description,
+                status: carData.status,
+                featured: carData.featured,
+                images: imageUrls, // Store the array of image URLs
             },
         });
 
 
         revalidatePath('/admin/cars');
 
-        return{
+        return {
             success: true,
         }
     }
     catch (err) {
-        throw new Error("Error adding car : "+ err.message)
+        throw new Error("Error adding car : " + err.message)
     }
+}
+
+
+export async function getCars(search = "") {
+    try {
+        const { userId } = await auth();
+        if (!userId) throw new Error("unauthorized");
+
+        const user = await db.user.findUnique({
+            where: { clerkUserId: userId },
+        });
+
+        if (!user) throw new Error("user not found");
+
+        let where = {};
+
+        if (search) {
+            where.OR = [
+                { make: { contains: search, mode: "insensitive" } },
+                { model: { contains: search, mode: "insensitive" } },
+                { color: { conatins: search, mode: "insensitive" } }
+            ];
+        }
+
+        const cars = await db.car.findMany({
+            where,
+            orderBy: { createdAt: "desc" },
+        })
+        const serializedCars = cars.map(serializeCarData);
+
+        return {
+            success: true,
+            data: serializedCars
+        }
+    }
+    catch (err) {
+        console.log("Error Fetching cars:", err);
+        return {
+            success: false,
+            error: err.message
+        }
+    }
+}
+
+
+export async function deleteCar(id) {
+    try {
+        const { userId } = await auth();
+        if (!userId) throw new Error("unauthorized");
+
+        const user = await db.user.findUnique({
+            where: { clerkUserId: userId },
+        });
+
+        if (!user) throw new Error("user not found");
+
+        const car = await db.cars.findUnique({
+            where: { id },
+            select: { images: true },
+        })
+
+        if (!car) {
+            return {
+                success: false,
+                error: "Car not found",
+            }
+        }
+
+        await db.car.delete({
+            where: { id },
+        });
+
+        try {
+            const cookieStore = await cookies();
+            const supabase = createClient(cookieStore);
+
+            const filePaths = car.images.map((imageUrl) => {
+                const url = new URL(imageUrl);
+                const pathMatch = url.pathname.match(/\/car-images\/(.*)/);
+                return pathMatch ? pathMatch[1] : null;
+            }).filter(Boolean);
+
+            if (filePaths.length > 0) {
+                const { error } = await supabase.storage
+                    .from("car-images")
+                    .remove(filePaths)
+
+                if (error) {
+                    console.error("Error deleting images:", error);
+                }
+            }
+        }
+        catch (storageerr) {
+            console.log("Error with storage operatons: ", storageerr)
+        }
+
+        revalidatePath("/admin/cars");
+
+        return {
+            success: true
+        }
+    }
+    catch (err) {
+        console.log("Error deleting car: ", err);
+        return {
+            success: false,
+            error: err.message
+        }
+    }
+}
+
+export async function updateCarStatus(id, { status, featured }) {
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const updateData = {};
+
+    if (status !== undefined) {
+      updateData.status = status;
+    }
+
+    if (featured !== undefined) {
+      updateData.featured = featured;
+    }
+
+    // Update the car
+    await db.car.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // Revalidate the cars list page
+    revalidatePath("/admin/cars");
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error updating car status:", error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
 }
