@@ -1,8 +1,8 @@
-import { SignIn } from '@clerk/nextjs'
+import { SignIn, SignUp } from '@clerk/nextjs'
 import React from 'react'
 
 const SignUpPage = () => {
-  return <SignIn/>
+  return <SignUp/>
 }
 
 export default SignUpPage
