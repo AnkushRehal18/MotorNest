@@ -21,7 +21,7 @@ import { addCar, processCarImagewithAi } from '@/actions/cars'
 import { useRouter } from 'next/navigation'
 
 const fuelTypes = ["Petrol", "Diesel", "Electric", "Hybrid", "Plug-in Hybrid"]
-const transmissions = ["Automatic", "Manual", "Semi-Automatic"]
+const transmission = ["Automatic", "Manual", "Semi-Automatic"]
 
 const bodyTypes = [
   "SUV",
@@ -399,7 +399,7 @@ const AddCarForm = () => {
                         <SelectValue placeholder="Select transmission" />
                       </SelectTrigger>
                       <SelectContent>
-                        {transmissions.map((type) => {
+                        {transmission.map((type) => {
                           return (
                             <SelectItem key={type} value={type}>
                               {type}
